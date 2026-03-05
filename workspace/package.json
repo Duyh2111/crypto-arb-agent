@@ -1,0 +1,16 @@
+{
+  "name": "crypto-arb-agent-workspace",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "test:binance":     "node test/price-binance.js",
+    "test:uniswap":     "node test/price-uniswap.js",
+    "test:jupiter":     "node test/price-jupiter.js",
+    "test:aggregator":  "node test/price-aggregator.js",
+    "test:arb":         "node test/arb-detector.js",
+    "test:all":         "node test/run-all.js"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}
