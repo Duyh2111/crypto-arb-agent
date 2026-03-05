@@ -33,28 +33,34 @@ OpenClaw Gateway (Docker)
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/crypto-arb-agent.git
-cd crypto-arb-agent
-cp .env.example .env
-# Edit .env with your API keys
+git clone https://github.com/Duyh2111/crypto-arb-agent.git
+cd crypto-arb-agent/workspace
+cp ../.env.example .env
+# Edit .env — minimum required: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 ```
 
-### 2. Start OpenClaw
+### 2. Run
 
 ```bash
-docker compose up -d
+./start.sh
 ```
 
-### 3. Connect Telegram
+The scheduler runs every 10 s, detects arb opportunities, and sends Telegram alerts.
+
+### 3. (Optional) Docker monitoring stack
 
 ```bash
-# Create a bot via @BotFather, save the token to .env
-docker compose run --rm openclaw-cli pairing approve telegram <CODE>
+cd ..
+docker compose -f docker-compose.monitoring.yml up -d
+# Grafana at http://localhost:3000  (admin/admin)
 ```
 
-### 4. Verify
+### 4. Backup logs
 
-Send "Show status" to your Telegram bot. It should respond with agent health.
+```bash
+cd workspace
+./backup.sh
+```
 
 ## Configuration
 
@@ -100,8 +106,8 @@ execution_mode: monitor_only
 - [x] Phase 5: Telegram notifications
 - [ ] Phase 6: Trading execution (complete ethers.js + @solana/web3.js)
 - [x] Phase 7: Risk management
-- [ ] Phase 8: Grafana monitoring stack
-- [ ] Phase 9: Production hardening
+- [x] Phase 8: JSONL logging + daily reports
+- [x] Phase 9: Production hardening (start/healthcheck/backup scripts)
 
 ## Security
 
