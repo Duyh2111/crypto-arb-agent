@@ -1,32 +1,28 @@
 'use strict';
 require('dotenv').config();
 
-/**
- * Crypto Arbitrage Agent — Standalone Scheduler
- * Runs arb detection every 10s and sends Telegram alerts directly.
- * Does NOT require the OpenClaw LLM to be working.
- *
- * Usage: node workspace/scheduler.js
- * Env:   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
- */
-
 const { sendMessage, sendRateLimited } = require('./lib/telegram');
 const { formatScanResult, formatSystemHealth, formatError } = require('./lib/format-alerts');
-const arbDetector = require('./skills/arb-detector/index');
+const { logOpportunity, logRiskEvent, logError }            = require('./lib/logger');
+const { generateDailyReport, formatDailyReportTelegram }    = require('./lib/daily-report');
+const arbDetector  = require('./skills/arb-detector/index');
+const riskManager  = require('./skills/risk-manager/index');
 
 // ── Config ───────────────────────────────────────────────────────────────────
-const BOT_TOKEN  = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID    = process.env.TELEGRAM_CHAT_ID;
-const PAIRS      = (process.env.ARB_PAIRS || 'ETH/USD').split(',').map(s => s.trim());
-const INTERVAL_S = parseInt(process.env.ARB_INTERVAL_S || '10');
-const HEALTH_INTERVAL_S = parseInt(process.env.HEALTH_INTERVAL_S || '3600'); // hourly
+const BOT_TOKEN         = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID           = process.env.TELEGRAM_CHAT_ID;
+const PAIRS             = (process.env.ARB_PAIRS || 'ETH/USD').split(',').map(s => s.trim());
+const INTERVAL_S        = parseInt(process.env.ARB_INTERVAL_S   || '10');
+const HEALTH_INTERVAL_S = parseInt(process.env.HEALTH_INTERVAL_S || '3600');
+const DAILY_REPORT_HOUR = parseInt(process.env.DAILY_REPORT_HOUR || '23'); // 11pm
 
-// ── State ────────────────────────────────────────────────────────────────────
-const startTime = Date.now();
-let scanCount      = 0;
-let errorCount     = 0;
-let oppsToday      = 0;
-let lastHealthSent = 0;
+// ── State ─────────────────────────────────────────────────────────────────────
+const startTime      = Date.now();
+let scanCount        = 0;
+let errorCount       = 0;
+let lastHealthSent   = 0;
+let lastDailyReport  = '';
+let isShuttingDown   = false;
 
 function uptime() {
   const s = Math.floor((Date.now() - startTime) / 1000);
@@ -39,86 +35,147 @@ function log(msg) {
   console.log(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
 }
 
-// ── Main scan loop ───────────────────────────────────────────────────────────
+async function tg(text) {
+  if (!BOT_TOKEN || !CHAT_ID) return;
+  return sendMessage(BOT_TOKEN, CHAT_ID, text).catch(e => log(`TG error: ${e.message}`));
+}
+
+// ── Risk check before any opportunity action ──────────────────────────────────
+async function riskCheck(opp) {
+  try {
+    const state = await riskManager({ action: 'get_state' });
+    if (state.state.emergency_stop) {
+      log('🛑 Emergency stop active — skipping');
+      return false;
+    }
+    if (state.state.circuit_breaker_active) {
+      log('⚡ Circuit breaker active — skipping');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    log(`Risk check error: ${e.message}`);
+    return true; // don't block on risk manager errors
+  }
+}
+
+// ── Main scan ─────────────────────────────────────────────────────────────────
 async function scan() {
+  if (isShuttingDown) return;
+
   for (const symbol of PAIRS) {
     try {
       const result = await arbDetector({ symbol });
       scanCount++;
 
       if (result.status === 'stale') {
-        log(`⚠️  ${symbol}: stale prices, skipping`);
+        log(`⚠️  ${symbol}: stale prices`);
         continue;
       }
 
-      log(`📊 ${symbol}: ${result.opportunities.length} opp(s) found`);
+      const count = result.opportunities.length;
+      log(`📊 ${symbol}: ${count} opp(s) | spread: ${
+        result.opportunities[0]?.raw_spread_pct ?? '–'
+      }%`);
 
-      const message = formatScanResult(symbol, result);
-      if (message && BOT_TOKEN && CHAT_ID) {
-        const key = `opp:${symbol}`;
-        const sent = await sendRateLimited(BOT_TOKEN, CHAT_ID, message, key, 120000);
-        if (sent.skipped) {
-          log(`   ↳ alert rate-limited (cooldown active)`);
-        } else {
-          log(`   ↳ alert sent to Telegram ✅`);
-          oppsToday += result.opportunities.length;
+      for (const opp of result.opportunities) {
+        // Log every opportunity regardless
+        logOpportunity(opp);
+
+        // Risk check
+        const safe = await riskCheck(opp);
+        if (!safe) continue;
+
+        // Send alert (rate-limited per route)
+        const message = formatScanResult(symbol, { opportunities: [opp] });
+        if (message) {
+          const key = `opp:${symbol}:${opp.buy_exchange}:${opp.sell_exchange}`;
+          const sent = await sendRateLimited(BOT_TOKEN, CHAT_ID, message, key, 120000);
+          if (!sent?.skipped) log(`   ↳ alert sent ✅`);
         }
       }
     } catch (err) {
       errorCount++;
-      log(`❌ ${symbol} scan error: ${err.message}`);
-      if (BOT_TOKEN && CHAT_ID) {
-        await sendMessage(BOT_TOKEN, CHAT_ID, formatError(`scan:${symbol}`, err.message))
-          .catch(() => {});
+      logError(`scan:${symbol}`, err);
+      log(`❌ ${symbol}: ${err.message}`);
+      if (errorCount % 10 === 0) {
+        // Only notify every 10th error to avoid spam
+        await tg(formatError(`scan:${symbol}`, err.message));
       }
     }
   }
 }
 
-// ── Hourly health report ─────────────────────────────────────────────────────
+// ── Hourly health report ──────────────────────────────────────────────────────
 async function sendHealthReport() {
-  if (!BOT_TOKEN || !CHAT_ID) return;
+  const riskState = await riskManager({ action: 'get_state' }).catch(() => null);
   const msg = formatSystemHealth({
-    uptime: uptime(),
-    pairsMonitored: PAIRS.length,
-    lastScan: new Date().toISOString().slice(11, 19) + ' UTC',
-    opportunitiesToday: oppsToday,
-    errors: errorCount,
+    uptime:            uptime(),
+    pairsMonitored:    PAIRS.length,
+    lastScan:          new Date().toISOString().slice(11, 19) + ' UTC',
+    opportunitiesToday: (await import('./lib/logger.js').catch(() => require('./lib/logger'))).getDailySummary().total,
+    errors:            errorCount,
   });
-  await sendMessage(BOT_TOKEN, CHAT_ID, msg).catch(e => log(`Health report failed: ${e.message}`));
+  await tg(msg);
   lastHealthSent = Date.now();
+  log('💓 Health report sent');
 }
 
-// ── Boot ─────────────────────────────────────────────────────────────────────
+// ── Daily report at DAILY_REPORT_HOUR ─────────────────────────────────────────
+async function maybeSendDailyReport() {
+  const now   = new Date();
+  const today = now.toISOString().slice(0, 10);
+  if (now.getHours() === DAILY_REPORT_HOUR && lastDailyReport !== today) {
+    lastDailyReport = today;
+    const { generateDailyReport: gen } = require('./lib/daily-report');
+    const { file } = gen({ uptime: uptime(), scanCount, errorCount });
+    const telegramMsg = formatDailyReportTelegram({ uptime: uptime(), scanCount, errorCount });
+    await tg(telegramMsg);
+    log(`📋 Daily report generated: ${file}`);
+  }
+}
+
+// ── Graceful shutdown ─────────────────────────────────────────────────────────
+async function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  log(`\n🛑 ${signal} received — shutting down gracefully`);
+  await tg(`🛑 <b>Arb Agent stopped</b>\n\nSignal: ${signal}\nUptime: ${uptime()}\nScans: ${scanCount}`);
+  process.exit(0);
+}
+
+process.on('SIGINT',  () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
 async function main() {
-  log('🦞 Crypto Arb Agent scheduler starting...');
+  log('🦞 Crypto Arb Agent starting...');
   log(`   Pairs:    ${PAIRS.join(', ')}`);
   log(`   Interval: ${INTERVAL_S}s`);
-  log(`   Telegram: ${BOT_TOKEN ? '✅ configured' : '⚠️  not configured (console-only mode)'}`);
+  log(`   Health:   every ${HEALTH_INTERVAL_S}s`);
+  log(`   Telegram: ${BOT_TOKEN ? '✅' : '⚠️  not configured'}`);
 
-  if (BOT_TOKEN && CHAT_ID) {
-    await sendMessage(BOT_TOKEN, CHAT_ID,
-      `🚀 <b>Arb Agent started</b>\n\nMonitoring: ${PAIRS.join(', ')}\nInterval: ${INTERVAL_S}s\nMode: Monitor Only`
-    ).catch(e => log(`Startup message failed: ${e.message}`));
-  }
+  await tg(`🚀 <b>Arb Agent started</b>\n\nMonitoring: <b>${PAIRS.join(', ')}</b>\nInterval: ${INTERVAL_S}s\nMode: <b>Monitor Only</b> 🔍\n\nUptime counter started.`);
 
   // Initial scan immediately
   await scan();
 
-  // Schedule recurring scans
+  // Recurring scans
   setInterval(scan, INTERVAL_S * 1000);
 
-  // Schedule hourly health report
+  // Health report check every minute
   setInterval(async () => {
     if (Date.now() - lastHealthSent >= HEALTH_INTERVAL_S * 1000) {
       await sendHealthReport();
     }
+    await maybeSendDailyReport();
   }, 60000);
 
-  log('✅ Scheduler running. Press Ctrl+C to stop.');
+  log(`✅ Running. Press Ctrl+C to stop.\n`);
 }
 
 main().catch(e => {
-  console.error('Fatal error:', e);
+  logError('startup', e);
+  console.error('Fatal:', e.message);
   process.exit(1);
 });
