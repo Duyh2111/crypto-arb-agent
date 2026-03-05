@@ -1,6 +1,7 @@
 'use strict';
 
-const JUPITER_QUOTE_URL = 'https://quote-api.jup.ag/v6/quote';
+// Jupiter moved to a token-gated API; use their public lite endpoint
+const JUPITER_QUOTE_URL = 'https://api.jup.ag/price/v2';
 
 // Well-known Solana mint addresses
 const MINTS = {

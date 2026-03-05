@@ -28,7 +28,7 @@ function sqrtPriceX96ToPrice(sqrtPriceX96, decimals0 = 18, decimals1 = 6) {
 
 async function fetchGasPriceGwei() {
   try {
-    const rpcUrl = process.env.ETH_RPC_URL || 'https://rpc.ankr.com/eth';
+    const rpcUrl = process.env.ETH_RPC_URL || 'https://ethereum.publicnode.com'; // free, no key needed
     const res = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
