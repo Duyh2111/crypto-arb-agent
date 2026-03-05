@@ -1,0 +1,7 @@
+# Replace with your actual domain
+# openclaw.yourdomain.com {
+#   reverse_proxy localhost:18789
+# }
+
+# Or use Tailscale for zero-config secure access (no domain needed)
+# tailscale serve 18789

@@ -1,0 +1,21 @@
+# Arbitrage detection configuration
+monitoring:
+  interval_seconds: 10
+  pairs:
+    - ETH/USDT
+    - BTC/USDT
+    - SOL/USDT
+
+thresholds:
+  min_net_spread_pct: 0.5        # minimum profit after fees
+  min_confidence: 0.7             # 0-1 confidence score
+  max_price_age_seconds: 10       # reject stale prices
+  anomaly_spread_pct: 10.0        # treat >10% as data error
+
+costs:
+  binance_fee_pct: 0.1
+  uniswap_fee_pct: 0.3
+  jupiter_fee_bps: 25
+  eth_gas_estimate_usd: 10.0
+  sol_gas_estimate_usd: 0.001
+  slippage_buffer_pct: 0.1

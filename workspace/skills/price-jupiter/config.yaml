@@ -1,0 +1,13 @@
+name: price-jupiter
+version: 1.0.0
+description: Fetch Solana token prices via Jupiter aggregator Quote API v6
+entry: index.js
+parameters:
+  - name: symbol
+    type: string
+    required: true
+  - name: amount
+    type: number
+    required: false
+    description: Amount in base token native units (default = 1 token)
+cache_ttl_seconds: 2

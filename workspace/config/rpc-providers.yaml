@@ -1,0 +1,16 @@
+ethereum:
+  primary: https://mainnet.infura.io/v3/${INFURA_API_KEY}
+  fallback:
+    - https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_ETH_KEY}
+    - https://rpc.ankr.com/eth
+
+solana:
+  primary: https://api.mainnet-beta.solana.com
+  fallback:
+    - https://solana-mainnet.g.alchemy.com/v2/${ALCHEMY_SOL_KEY}
+
+# Testnet overrides (set BINANCE_TESTNET=true in .env)
+testnet:
+  binance: https://testnet.binance.vision
+  ethereum: https://sepolia.infura.io/v3/${INFURA_API_KEY}
+  solana: https://api.devnet.solana.com

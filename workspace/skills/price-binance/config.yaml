@@ -1,0 +1,11 @@
+name: price-binance
+version: 1.0.0
+description: Fetch real-time bid/ask prices from Binance CEX
+entry: index.js
+parameters:
+  - name: symbol
+    type: string
+    required: true
+    description: Trading pair (e.g. "ETH/USDT")
+cache_ttl_seconds: 2
+rate_limit_per_minute: 1200

@@ -1,0 +1,22 @@
+# Secrets — NEVER commit
+.env
+*.key
+*.pem
+
+# Logs (large, ephemeral)
+workspace/logs/*.jsonl
+workspace/logs/*.log
+
+# Reports (auto-generated)
+workspace/reports/
+
+# Node
+node_modules/
+dist/
+
+# Docker overrides with secrets
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db

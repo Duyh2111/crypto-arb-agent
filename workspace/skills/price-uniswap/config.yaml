@@ -1,0 +1,14 @@
+name: price-uniswap
+version: 1.0.0
+description: Fetch token prices from Uniswap V3 via subgraph
+entry: index.js
+parameters:
+  - name: symbol
+    type: string
+    required: true
+  - name: pool_address
+    type: string
+    required: false
+cache_ttl_seconds: 3
+dependencies:
+  - graphql-request

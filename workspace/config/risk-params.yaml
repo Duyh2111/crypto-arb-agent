@@ -1,0 +1,23 @@
+risk:
+  max_position_size_usd: 500       # max value per single trade
+  max_daily_loss_usd: 100          # stop all trading if exceeded
+  max_open_positions: 3            # concurrent arbitrage positions
+  min_net_spread_pct: 0.5          # minimum profit after fees
+  max_slippage_pct: 1.0            # cancel if slippage exceeds
+  stale_price_timeout_sec: 10      # reject opportunity if price older
+  circuit_breaker_losses: 3        # pause after N consecutive losses
+  daily_trade_limit: 50            # max trades per 24h
+  max_capital_deployed_usd: 2000   # total across all platforms
+
+gas_limits:
+  max_eth_gas_gwei: 50             # skip Uniswap if gas exceeds
+  max_sol_priority_fee: 10000      # lamports
+
+anomaly:
+  max_spread_pct: 10.0             # >10% treated as data error, not opportunity
+  min_liquidity_usd: 50000         # skip pools with low liquidity
+
+# Execution mode: monitor_only | manual_approve | semi_auto | full_auto
+# START WITH monitor_only — run for 1-2 weeks before changing
+execution_mode: monitor_only
+semi_auto_threshold_usd: 100       # auto-execute below this; require approval above

@@ -1,0 +1,20 @@
+# Trading pairs to monitor across platforms
+# Format: base/quote
+pairs:
+  - symbol: ETH/USDT
+    binance_symbol: ETHUSDT
+    uniswap_pool: "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"  # ETH/USDC 0.05% pool
+    uniswap_fee_tier: 500
+    jupiter_input_mint: "So11111111111111111111111111111111111111112"  # SOL
+    jupiter_output_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # USDC
+    enabled: true
+
+  - symbol: BTC/USDT
+    binance_symbol: BTCUSDT
+    enabled: false  # enable when ready
+
+  - symbol: SOL/USDT
+    binance_symbol: SOLUSDT
+    jupiter_input_mint: "So11111111111111111111111111111111111111112"
+    jupiter_output_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    enabled: false  # enable when ready
