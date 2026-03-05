@@ -39,7 +39,7 @@ async function fetchJupiterPrice(symbol) {
     route_plan: 'defillama-aggregated',
     fee_bps: 0,
     gas_estimate_usd: 0.001,
-    timestamp: new Date(coinData.timestamp * 1000).toISOString(),
+    timestamp: new Date().toISOString(), // use fetch time; DeFiLlama data is always fresh
   };
 
   cache.set(symbol, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
